@@ -1,3 +1,20 @@
+## 2.0.5
+
+* Fixes bugs in `Xchacha20.poly1305`.
+
+## 2.0.4
+
+* Fixes an import of 'dart:io' that caused issues.
+
+## 2.0.3
+
+* Updates dependency constraints and linting rules.
+
+## 2.0.2
+
+* Fixes an issue in SecretBox.fromConcatenation.
+* Improves documentation.
+
 ## 2.0.1
 
 * Documentation fixes.

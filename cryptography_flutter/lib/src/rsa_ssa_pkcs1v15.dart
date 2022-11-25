@@ -20,7 +20,9 @@ import 'package:cryptography/helpers.dart';
 
 import 'internal.dart';
 
+/// [RsaSsaPkcs1v15] implemented with operating system APIs.
 class FlutterRsaSsaPkcs1v15 extends DelegatingSignatureAlgorithm
+    with FlutterCryptographyImplementation
     implements RsaSsaPkcs1v15 {
   @override
   final RsaSsaPkcs1v15 fallback;
@@ -114,7 +116,6 @@ class FlutterRsaSsaPkcs1v15 extends DelegatingSignatureAlgorithm
         return Signature(bytes, publicKey: await rsaKeyPair.extractPublicKey());
       } catch (error) {
         usePlugin = false;
-        print(error);
       }
     }
     return super.sign(data, keyPair: keyPair);
@@ -138,9 +139,9 @@ class FlutterRsaSsaPkcs1v15 extends DelegatingSignatureAlgorithm
           throw StateError('Invalid output from plugin: $result');
         }
         return result['result'] as bool;
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        print(error);
+        reportError(error, stackTrace);
       }
     }
     return super.verify(data, signature: signature);

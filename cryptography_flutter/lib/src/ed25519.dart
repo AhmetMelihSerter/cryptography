@@ -20,7 +20,10 @@ import 'package:cryptography/helpers.dart';
 
 import 'internal.dart';
 
-class FlutterEd25519 extends DelegatingSignatureAlgorithm implements Ed25519 {
+/// [Ed25519] implemented with operating system APIs.
+class FlutterEd25519 extends DelegatingSignatureAlgorithm
+    with FlutterCryptographyImplementation
+    implements Ed25519 {
   @override
   final Ed25519 fallback;
 
@@ -34,13 +37,13 @@ class FlutterEd25519 extends DelegatingSignatureAlgorithm implements Ed25519 {
   }
 
   @override
-  Future<SimpleKeyPair> newKeyPairFromSeed(List<int> seed) async {
+  Future<SimpleKeyPair> newKeyPairFromSeed(List<int> bytes) async {
     if (usePlugin) {
       try {
         final result = await channel.invokeMethod(
           'ed25519_new_key',
           {
-            'seed': Uint8List.fromList(seed),
+            'seed': Uint8List.fromList(bytes),
           },
         );
         if (result is! Map) {
@@ -56,12 +59,12 @@ class FlutterEd25519 extends DelegatingSignatureAlgorithm implements Ed25519 {
           publicKey: publicKey,
           type: KeyPairType.ed25519,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        print(error);
+        reportError(error, stackTrace);
       }
     }
-    return fallback.newKeyPairFromSeed(seed);
+    return fallback.newKeyPairFromSeed(bytes);
   }
 
   @override
@@ -117,9 +120,9 @@ class FlutterEd25519 extends DelegatingSignatureAlgorithm implements Ed25519 {
           throw StateError('error in "package:cryptography_flutter": $error');
         }
         return result['result'] as bool;
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        print(error);
+        reportError(error, stackTrace);
       }
     }
     return super.verify(data, signature: signature);

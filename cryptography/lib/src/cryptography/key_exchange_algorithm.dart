@@ -16,13 +16,13 @@ import 'package:cryptography/cryptography.dart';
 
 /// A key exchange algorithm that supports [newKeyPair()] and [sharedSecretKey()].
 ///
-/// # Available algorithms
+/// ## Available algorithms
 ///   * [Ecdh.p256]
 ///   * [Ecdh.p384]
 ///   * [Ecdh.p521]
 ///   * [X25519]
 ///
-/// # Example
+/// ## Example
 /// In this example, we use [X25519]:
 /// ```dart
 /// import 'package:cryptography/cryptography.dart';
@@ -55,7 +55,7 @@ abstract class KeyExchangeAlgorithm {
   /// You can pass key generation preferences by specifying `options`.
   Future<KeyPair> newKeyPair();
 
-  Future<KeyPair> newKeyPairFromSeed(List<int> bytes) {
+  Future<KeyPair> newKeyPairFromSeed(List<int> seed) {
     throw UnsupportedError(
       'newKeyPairFromSeed() is unsupported by this algorithm',
     );

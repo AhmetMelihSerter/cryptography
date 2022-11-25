@@ -6,6 +6,8 @@
 Cryptographic packages for [Dart](https://dart.dev) / [Flutter](https://flutter.dev) developers.
 Open-sourced under the [Apache License 2.0](LICENSE).
 
+Maintained by Gohilla Ltd. Licensed under the [Apache License 2.0](LICENSE).
+
 ## Packages
   * [cryptography](cryptography)
     * Cryptography API for Dart / Flutter.
@@ -15,11 +17,6 @@ Open-sourced under the [Apache License 2.0](LICENSE).
     * Contains cryptography implementations that use Android / iOS APIs.
   * [jwk](jwk)
     * JWK (JSON Web Key) encoding / decoding.
-  * [kms](kms)
-    * Key Management Service (KMS) API for Dart / Flutter.
-  * [kms_flutter](kms_flutter)
-  * [noise_protocol](noise_protocol)
-    * Noise protocol implemented in pure Dart.
 
 ## Contributing
 Please share feedback / issue reports in the

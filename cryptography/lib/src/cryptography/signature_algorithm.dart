@@ -17,7 +17,7 @@ import 'package:cryptography/cryptography.dart';
 /// An digital signature algorithm that supports [newKeyPair()], [sign()],
 /// [verify()].
 ///
-/// # Available algorithms
+/// ## Available algorithms
 ///   * [Ecdsa.p256]
 ///   * [Ecdsa.p384]
 ///   * [Ecdsa.p521]
@@ -25,7 +25,7 @@ import 'package:cryptography/cryptography.dart';
 ///   * [RsaPss]
 ///   * [RsaSsaPkcs1v15]
 ///
-/// # Example
+/// ## Example
 /// In this example, we use [Ed25519]:
 /// ```
 /// import 'package:cryptography/cryptography.dart';
@@ -63,7 +63,7 @@ abstract class SignatureAlgorithm {
   /// You can pass key generation preferences by specifying `options`.
   Future<KeyPair> newKeyPair();
 
-  Future<KeyPair> newKeyPairFromSeed(List<int> bytes) {
+  Future<KeyPair> newKeyPairFromSeed(List<int> seed) {
     throw UnsupportedError(
         'newKeyPairFromSeed() is unsupported by this algorithm');
   }

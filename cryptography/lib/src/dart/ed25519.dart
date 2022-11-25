@@ -19,8 +19,7 @@ import 'package:cryptography/cryptography.dart';
 import '../utils.dart';
 import 'ed25519_impl.dart';
 
-/// _Ed25519_ ([RFC 8032](https://tools.ietf.org/html/rfc8032)) signature
-/// algorithm implemented in pure Dart.
+/// [Ed25519] signature algorithm implemented in pure Dart.
 class DartEd25519 extends Ed25519 {
   final Sha512 _sha512;
 
@@ -105,7 +104,7 @@ class DartEd25519 extends Ed25519 {
   }
 
   @override
-  Future<bool> verify(List<int> input, {required Signature signature}) async {
+  Future<bool> verify(List<int> message, {required Signature signature}) async {
     // Check that parameters appear valid
     final publicKeyBytes = (signature.publicKey as SimplePublicKey).bytes;
     final signatureBytes = signature.bytes;
@@ -139,12 +138,12 @@ class DartEd25519 extends Ed25519 {
 
     // Get `s`
     final s = bigIntFromBytes(signatureBytes.sublist(32));
-    if (s >= RegisterL.LBigInt) {
+    if (s >= RegisterL.constantL) {
       return false;
     }
 
     // Calculate `h`
-    final hh = await _sha512.hash(_join([rBytes, publicKeyBytes, input]));
+    final hh = await _sha512.hash(_join([rBytes, publicKeyBytes, message]));
     final h = RegisterL();
     h.readBytes(hh.bytes);
 

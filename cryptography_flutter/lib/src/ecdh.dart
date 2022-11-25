@@ -20,7 +20,9 @@ import 'package:cryptography/helpers.dart';
 
 import 'internal.dart';
 
-class FlutterEcdh extends DelegatingEcdh {
+/// [Ecdh] implemented with operating system APIs.
+class FlutterEcdh extends DelegatingEcdh
+    with FlutterCryptographyImplementation {
   @override
   final Ecdh fallback;
   final String algorithmName;
@@ -54,10 +56,6 @@ class FlutterEcdh extends DelegatingEcdh {
       y: y,
       type: keyPairType,
     );
-  }
-
-  void reportError(Object error) {
-    print(error);
   }
 
   @override
@@ -104,9 +102,9 @@ class FlutterEcdh extends DelegatingEcdh {
         }
         final bytes = result['bytes'] as Uint8List;
         return SecretKey(bytes);
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        reportError(error);
+        reportError(error, stackTrace);
       }
     }
     return super.sharedSecretKey(

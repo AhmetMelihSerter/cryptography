@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/dart.dart';
 import 'package:cryptography/helpers.dart';
 
 import 'internal.dart';
@@ -38,10 +36,6 @@ Future<List<int>> _decryptWithPlugin(
       'mac': Uint8List.fromList(secretBox.mac.bytes),
     },
   );
-  final error = result['error'];
-  if (error is String) {
-    throw StateError(error);
-  }
   return result['clearText'] as Uint8List;
 }
 
@@ -63,10 +57,6 @@ Future<SecretBox> _encryptWithPlugin(
       'nonce': Uint8List.fromList(nonce),
     },
   );
-  final error = result['error'];
-  if (error is String) {
-    throw StateError(error);
-  }
   final cipherText = result['cipherText'] as Uint8List;
   var mac = Mac.empty;
   if (result.containsKey('mac')) {
@@ -75,75 +65,8 @@ Future<SecretBox> _encryptWithPlugin(
   return SecretBox(cipherText, nonce: nonce, mac: mac);
 }
 
-class FlutterAesCbc extends FlutterCipher implements AesCbc {
-  @override
-  final AesCbc fallback;
-
-  @override
-  FlutterAesCbc(this.fallback);
-
-  @override
-  bool get isSupportedPlatform => Platform.isAndroid;
-
-  @override
-  String get pluginCipherName => 'AesCbc';
-
-  @override
-  int get secretKeyLength => fallback.secretKeyLength;
-}
-
-class FlutterAesCtr extends FlutterStreamingCipher implements AesCtr {
-  @override
-  final AesCtr fallback;
-
-  FlutterAesCtr(this.fallback);
-
-  @override
-  int get counterBits => fallback.counterBits;
-
-  @override
-  bool get isSupportedPlatform => Platform.isAndroid;
-
-  @override
-  String get pluginCipherName => 'AesCtr';
-
-  @override
-  int get secretKeyLength => fallback.secretKeyLength;
-}
-
-class FlutterAesGcm extends FlutterStreamingCipher implements AesGcm {
-  @override
-  final AesGcm fallback;
-
-  FlutterAesGcm(this.fallback);
-
-  @override
-  bool get isSupportedPlatform =>
-      Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
-
-  @override
-  String get pluginCipherName => 'AesGcm';
-
-  @override
-  int get secretKeyLength => fallback.secretKeyLength;
-}
-
-class FlutterChacha20 extends FlutterStreamingCipher implements Chacha20 {
-  @override
-  final Chacha20 fallback;
-
-  FlutterChacha20(this.fallback);
-
-  @override
-  bool get isSupportedPlatform =>
-      (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) &&
-      macAlgorithm is DartChacha20Poly1305AeadMacAlgorithm;
-
-  @override
-  String get pluginCipherName => 'Chacha20.poly1305Aead';
-}
-
-abstract class FlutterCipher extends DelegatingCipher {
+abstract class FlutterCipher extends DelegatingCipher
+    with FlutterCryptographyImplementation {
   late bool usePlugin = isSupportedPlatform;
 
   bool get isSupportedPlatform;
@@ -158,15 +81,15 @@ abstract class FlutterCipher extends DelegatingCipher {
   }) async {
     if (usePlugin) {
       try {
-        return _decryptWithPlugin(
+        return await _decryptWithPlugin(
           this,
           secretBox,
           secretKey: secretKey,
           aad: aad,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        reportError(error);
+        reportError(error, stackTrace);
       }
     }
     return super.decrypt(
@@ -185,16 +108,16 @@ abstract class FlutterCipher extends DelegatingCipher {
   }) async {
     if (usePlugin) {
       try {
-        return _encryptWithPlugin(
+        return await _encryptWithPlugin(
           this,
           clearText,
           secretKey: secretKey,
           nonce: nonce,
           aad: aad,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        reportError(error);
+        reportError(error, stackTrace);
       }
     }
     return super.encrypt(
@@ -204,16 +127,10 @@ abstract class FlutterCipher extends DelegatingCipher {
       aad: aad,
     );
   }
-
-  void reportError(Object error) {
-    if (error is UnsupportedError) {
-      return;
-    }
-    print('"package:cryptography_flutter": error: $error');
-  }
 }
 
 abstract class FlutterStreamingCipher extends DelegatingStreamingCipher
+    with FlutterCryptographyImplementation
     implements FlutterCipher {
   @override
   late bool usePlugin = isSupportedPlatform;
@@ -233,15 +150,15 @@ abstract class FlutterStreamingCipher extends DelegatingStreamingCipher
   }) async {
     if (keyStreamIndex == 0 && usePlugin) {
       try {
-        return _decryptWithPlugin(
+        await _decryptWithPlugin(
           this,
           secretBox,
           secretKey: secretKey,
           aad: aad,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        reportError(error);
+        reportError(error, stackTrace);
       }
     }
     return super.decrypt(
@@ -262,16 +179,16 @@ abstract class FlutterStreamingCipher extends DelegatingStreamingCipher
   }) async {
     if (keyStreamIndex == 0 && usePlugin) {
       try {
-        return _encryptWithPlugin(
+        return await _encryptWithPlugin(
           this,
           clearText,
           secretKey: secretKey,
           nonce: nonce,
           aad: aad,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         usePlugin = false;
-        reportError(error);
+        reportError(error, stackTrace);
       }
     }
     return super.encrypt(
@@ -281,13 +198,5 @@ abstract class FlutterStreamingCipher extends DelegatingStreamingCipher
       aad: aad,
       keyStreamIndex: keyStreamIndex,
     );
-  }
-
-  @override
-  void reportError(Object error) {
-    if (error is UnsupportedError) {
-      return;
-    }
-    print('"package:cryptography_flutter": error: $error');
   }
 }

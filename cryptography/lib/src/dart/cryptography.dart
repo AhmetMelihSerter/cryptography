@@ -17,7 +17,7 @@ import 'package:cryptography/dart.dart';
 
 /// An implementation of [Cryptography] in pure Dart.
 ///
-/// # Algorithms
+/// ## Algorithms
 /// The following algorithms are supported:
 ///   * [AesCbc]
 ///   * [AesCtr]
@@ -225,13 +225,11 @@ class DartCryptography extends Cryptography {
 
   @override
   Xchacha20 xchacha20({required MacAlgorithm macAlgorithm}) {
-    return DartXchacha20(
-      macAlgorithm: macAlgorithm,
-    );
+    return DartXchacha20(macAlgorithm: macAlgorithm);
   }
 
   @override
   Xchacha20 xchacha20Poly1305Aead() {
-    return xchacha20(macAlgorithm: DartChacha20Poly1305AeadMacAlgorithm());
+    return DartXchacha20.poly1305Aead();
   }
 }
