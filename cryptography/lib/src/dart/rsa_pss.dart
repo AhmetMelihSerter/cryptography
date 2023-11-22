@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:math';
+
 import 'package:cryptography/cryptography.dart';
 
-/// [RsaPss] implemented in pure Dart.
+/// [RsaPss] implementation in pure Dart. Currently it throws
+/// [UnimplementedError] if you try to use it.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [RsaPss].
 class DartRsaPss extends RsaPss {
   @override
   final HashAlgorithm hashAlgorithm;
 
+  @override
   final int nonceLengthInBytes;
 
   const DartRsaPss(
     this.hashAlgorithm, {
     this.nonceLengthInBytes = RsaPss.defaultNonceLengthInBytes,
+    Random? random,
   }) : super.constructor();
 
   @override

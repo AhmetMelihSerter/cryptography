@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,15 @@ import 'package:cryptography/src/dart/ed25519_impl.dart';
 import 'package:test/test.dart';
 
 void main() {
+  // ---------------------------------------------------------------------------
+  //
+  // IMPORTANT:
+  //
+  // We've migrated most of the tests to 'cryptography_test'.
+  // This file is only for tests that are specific to the 'cryptography'
+  // package.
+  //
+  // ---------------------------------------------------------------------------
   group('Register25519', () {
     final modulo = BigInt.two.pow(255) - BigInt.from(19);
 

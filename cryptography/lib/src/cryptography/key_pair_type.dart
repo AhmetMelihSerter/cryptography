@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,15 @@ class KeyPairType<S extends KeyPairData, P extends PublicKey> {
     name: 'p256',
     ellipticBits: 256,
     webCryptoCurve: 'P-256',
+  );
+
+  /// Key pair type for [Ecdh] and [Ecdsa] with P-256 curve.
+  ///
+  /// Keys of this type can be generated with [EcKeyPairGenerator].
+  static const KeyPairType p256k = KeyPairType<EcKeyPairData, EcPublicKey>._(
+    name: 'p256k',
+    ellipticBits: 256,
+    webCryptoCurve: 'P-256K',
   );
 
   /// Key pair type for [Ecdh] and [Ecdsa] with P-384 curve.
@@ -78,12 +87,12 @@ class KeyPairType<S extends KeyPairData, P extends PublicKey> {
 
   /// Maximum private key length (in bytes).
   ///
-  /// The value is -1 if any length is valid.
+  /// The value is -1 if multiple lengths is valid.
   final int privateKeyLength;
 
   /// Maximum public key length (in bytes).
   ///
-  /// The value is -1 if any length is valid.
+  /// The value is -1 if multiple lengths is valid.
   final int publicKeyLength;
 
   /// Web Crypto curve name.

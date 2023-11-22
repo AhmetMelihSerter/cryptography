@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,41 +17,29 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/dart.dart';
 
-Uint8List _xchacha20Nonce(List<int> nonce) {
-  final nonce96Bits = Uint8List(12);
-  for (var i = 0; i < 8; i++) {
-    nonce96Bits[4 + i] = nonce[16 + i];
-  }
-  return nonce96Bits;
-}
-
-Future<SecretKeyData> _xchacha20SecretKey({
-  required SecretKey secretKey,
-  required List<int> nonce,
-}) async {
-  final secretKeyData = await secretKey.extract();
-  return const DartHChacha20().deriveKeySync(
-    secretKeyData: secretKeyData,
-    nonce: nonce.sublist(0, 16),
-  );
-}
-
 /// [Xchacha20] implemented in pure Dart.
-class DartXchacha20 extends StreamingCipher implements Xchacha20 {
-  final Chacha20 _chacha20;
+///
+/// For more information about the algorithm and examples, see documentation
+/// for the class [Xchacha20].
+class DartXchacha20 extends Xchacha20
+    with DartCipherMixin, DartCipherWithStateMixin {
+  /// [MacAlgorithm] used by [DartXchacha20.poly1305Aead].
+  static const MacAlgorithm poly1305AeadMacAlgorithm =
+      _DartXchacha20Poly1305AeadMacAlgorithm();
 
   @override
   final MacAlgorithm macAlgorithm;
 
-  factory DartXchacha20.poly1305Aead() =>
-      DartXchacha20._poly1305Aead(Chacha20.poly1305Aead());
+  /// Constructs [Xchacha20] with any [MacAlgorithm].
+  DartXchacha20({
+    required this.macAlgorithm,
+    super.random,
+  }) : super.constructor();
 
-  DartXchacha20({required this.macAlgorithm})
-      : _chacha20 = Chacha20(macAlgorithm: macAlgorithm);
-
-  DartXchacha20._poly1305Aead(Chacha20 chacha20)
-      : _chacha20 = chacha20,
-        macAlgorithm = _DartXChacha20Poly1305Aead(chacha20.macAlgorithm);
+  const DartXchacha20.poly1305Aead({
+    super.random,
+  })  : macAlgorithm = poly1305AeadMacAlgorithm,
+        super.constructor();
 
   @override
   int get nonceLength => 24;
@@ -60,131 +48,102 @@ class DartXchacha20 extends StreamingCipher implements Xchacha20 {
   int get secretKeyLength => 32;
 
   @override
-  Future<List<int>> decrypt(
-    SecretBox secretBox, {
-    required SecretKey secretKey,
-    List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
-  }) async {
-    // Secret key for normal Chacha20
-    final derivedSecretKey = await _xchacha20SecretKey(
-      secretKey: secretKey,
-      nonce: secretBox.nonce,
-    );
-
-    // Nonce for normal Chacha20
-    final derivedNonce = _xchacha20Nonce(secretBox.nonce);
-
-    // New secret box
-    final derivedSecretBox = SecretBox(
-      secretBox.cipherText,
-      nonce: derivedNonce,
-      mac: secretBox.mac,
-    );
-
-    // Decrypt
-    final clearText = await _chacha20.decrypt(
-      derivedSecretBox,
-      secretKey: derivedSecretKey,
-      aad: aad,
-      keyStreamIndex: keyStreamIndex,
-    );
-
-    return clearText;
-  }
-
-  @override
-  Future<SecretBox> encrypt(
-    List<int> clearText, {
-    required SecretKey secretKey,
-    List<int>? nonce,
-    List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
-  }) async {
-    nonce ??= newNonce();
-
-    // New secret key for normal Chacha20
-    final derivedSecretKey = await _xchacha20SecretKey(
-      secretKey: secretKey,
-      nonce: nonce,
-    );
-
-    // New nonce for normal Chacha20
-    final derivedNonce = _xchacha20Nonce(nonce);
-
-    // Encrypt
-    final secretBox = await _chacha20.encrypt(
-      clearText,
-      secretKey: derivedSecretKey,
-      nonce: derivedNonce,
-      aad: aad,
-      keyStreamIndex: keyStreamIndex,
-    );
-
-    // New secret box
-    return SecretBox(
-      secretBox.cipherText,
-      nonce: nonce,
-      mac: secretBox.mac,
+  DartCipherState newState() {
+    return _DartXchacha20State(
+      cipher: this,
     );
   }
 }
 
-class _DartXChacha20Poly1305Aead extends MacAlgorithm {
-  final MacAlgorithm _macAlgorithm;
-
-  _DartXChacha20Poly1305Aead(this._macAlgorithm);
-
-  @override
-  int get macLength => _macAlgorithm.macLength;
+/// [MacAlgorithm] used by [DartXchacha20.poly1305Aead].
+class _DartXchacha20Poly1305AeadMacAlgorithm
+    extends DartChacha20Poly1305AeadMacAlgorithm {
+  const _DartXchacha20Poly1305AeadMacAlgorithm();
 
   @override
-  bool get supportsAad => _macAlgorithm.supportsAad;
-
-  @override
-  Future<Mac> calculateMac(
-    List<int> bytes, {
-    required SecretKey secretKey,
+  DartMacSinkMixin newMacSinkSync({
+    required SecretKeyData secretKeyData,
     List<int> nonce = const <int>[],
     List<int> aad = const <int>[],
-  }) async {
-    // New secret key
-    final derivedSecretKey = await _xchacha20SecretKey(
-      secretKey: secretKey,
+  }) {
+    final result = _DartXchacha20Poly1305AeadMacAlgorithmSink();
+    result.initializeSync(
+      secretKey: secretKeyData,
       nonce: nonce,
-    );
-
-    // New nonce
-    final derivedNonce = _xchacha20Nonce(nonce);
-
-    final mac = await _macAlgorithm.calculateMac(
-      bytes,
-      secretKey: derivedSecretKey,
-      nonce: derivedNonce,
       aad: aad,
     );
-    return mac;
+    return result;
   }
 
   @override
-  Future<MacSink> newMacSink({
-    required SecretKey secretKey,
-    List<int> nonce = const <int>[],
-    List<int> aad = const <int>[],
-  }) async {
-    // New secret key
-    final derivedSecretKey = await _xchacha20SecretKey(
-      secretKey: secretKey,
-      nonce: nonce,
-    );
+  _DartXchacha20Poly1305AeadMacAlgorithm toSync() {
+    return this;
+  }
+}
 
-    // New nonce
-    final derivedNonce = _xchacha20Nonce(nonce);
-
-    return _macAlgorithm.newMacSink(
-      secretKey: derivedSecretKey,
-      nonce: derivedNonce,
-      aad: aad,
+/// [MacSink] used by [DartXchacha20.poly1305Aead].
+class _DartXchacha20Poly1305AeadMacAlgorithmSink
+    extends DartChacha20Poly1305AeadMacAlgorithmSink {
+  @override
+  SecretKeyData deriveSecretKey({
+    required SecretKeyData secretKey,
+    required List<int> nonce,
+  }) {
+    if (nonce.length != 24) {
+      throw ArgumentError.value(
+        nonce,
+        'nonce',
+        'Invalid length ${nonce.length}',
+      );
+    }
+    final intermediateSecretKey = const DartHChacha20().deriveKeySync(
+      secretKeyData: secretKey,
+      nonce: nonce.sublist(0, 16),
     );
+    final intermediateNonce = Uint8List(12);
+    for (var i = 0; i < 8; i++) {
+      intermediateNonce[4 + i] = nonce[16 + i];
+    }
+    return super.deriveSecretKey(
+      secretKey: intermediateSecretKey,
+      nonce: intermediateNonce,
+    );
+  }
+}
+
+/// [CipherState] used by [DartXchacha20].
+class _DartXchacha20State extends DartChacha20State {
+  _DartXchacha20State({
+    required super.cipher,
+  });
+
+  @override
+  SecretKeyData deriveKeySync({
+    required SecretKeyData secretKey,
+    required List<int> nonce,
+  }) {
+    if (nonce.length != 24) {
+      throw ArgumentError.value(
+        nonce,
+        'nonce',
+        'Invalid length ${nonce.length}',
+      );
+    }
+    return const DartHChacha20().deriveKeySync(
+      secretKeyData: secretKey,
+      nonce: nonce.sublist(0, 16),
+    );
+  }
+
+  @override
+  List<int> deriveNonce({
+    required SecretKeyData secretKey,
+    required List<int> nonce,
+  }) {
+    final nonce96Bits = Uint8List(12);
+    for (var i = 0; i < 8; i++) {
+      nonce96Bits[4 + i] = nonce[16 + i];
+    }
+    return nonce96Bits;
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:math';
+
 import 'package:cryptography/cryptography.dart';
 
-/// An implementation of [DartRsaSsaPkcs1v15] in pure Dart.
+/// [DartRsaSsaPkcs1v15] implementation in pure Dart. Currently it throws
+/// [UnimplementedError] if you try to use it.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [Ecdh].
 class DartRsaSsaPkcs1v15 extends RsaSsaPkcs1v15 {
   @override
   final HashAlgorithm hashAlgorithm;
 
-  const DartRsaSsaPkcs1v15(this.hashAlgorithm) : super.constructor();
+  const DartRsaSsaPkcs1v15(
+    this.hashAlgorithm, {
+    Random? random,
+  }) : super.constructor();
 
   @override
   Future<RsaKeyPair> newKeyPair({

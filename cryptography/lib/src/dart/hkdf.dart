@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 /// [Hkdf] implemented in pure Dart.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [Hkdf].
 class DartHkdf extends Hkdf {
   @override
   final Hmac hmac;
@@ -28,7 +31,7 @@ class DartHkdf extends Hkdf {
       : super.constructor();
 
   @override
-  Future<SecretKey> deriveKey({
+  Future<SecretKeyData> deriveKey({
     required SecretKey secretKey,
     List<int> nonce = const <int>[],
     List<int> info = const <int>[],
@@ -69,6 +72,6 @@ class DartHkdf extends Hkdf {
         result.setAll(offset, bytes.take(result.length - offset));
       }
     }
-    return SecretKey(result);
+    return SecretKeyData(result);
   }
 }

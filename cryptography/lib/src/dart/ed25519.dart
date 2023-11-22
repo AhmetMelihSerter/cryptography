@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
@@ -20,26 +21,30 @@ import '../utils.dart';
 import 'ed25519_impl.dart';
 
 /// [Ed25519] signature algorithm implemented in pure Dart.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [Ed25519].
 class DartEd25519 extends Ed25519 {
   final Sha512 _sha512;
 
   DartEd25519({
     Sha512? sha512,
+    Random? random,
   })  : _sha512 = sha512 ?? Sha512(),
-        super.constructor();
+        super.constructor(random: random);
 
   @override
   KeyPairType get keyPairType => KeyPairType.ed25519;
 
   @override
-  Future<SimpleKeyPair> newKeyPairFromSeed(List<int> seed) {
+  Future<SimpleKeyPair> newKeyPairFromSeed(List<int> seed) async {
     if (seed.length != 32) {
       throw ArgumentError('Seed must have 32 bytes');
     }
     return Future<SimpleKeyPairData>.value(SimpleKeyPairData(
-      List<int>.unmodifiable(seed),
+      Uint8List.fromList(seed),
       type: KeyPairType.ed25519,
-      publicKey: _publicKey(seed),
+      publicKey: await _publicKey(seed),
     ));
   }
 
@@ -175,7 +180,7 @@ class DartEd25519 extends Ed25519 {
     ));
 
     return SimplePublicKey(
-      List<int>.unmodifiable(publicKeyBytes),
+      publicKeyBytes,
       type: KeyPairType.ed25519,
     );
   }

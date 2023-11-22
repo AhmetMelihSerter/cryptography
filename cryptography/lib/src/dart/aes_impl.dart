@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,9 @@
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/helpers.dart';
 
+import '../../dart.dart';
 import 'aes_impl_constants.dart' as constants;
 
 const _numberOfRounds = {
@@ -327,13 +329,25 @@ int _uint32ChangeEndian(int v) {
       (0xFF & (v >> 24));
 }
 
-mixin DartAesMixin implements Cipher {
+mixin DartAesMixin implements DartCipher {
+  @override
+  Future<SecretKey> newSecretKey() {
+    final bytes = Uint8List(secretKeyLength);
+    fillBytesWithSecureRandom(bytes, random: random);
+    return Future<_DartAesSecretKeyData>.value(_DartAesSecretKeyData(
+      bytes,
+      overwriteWhenDestroyed: true,
+    ));
+  }
+
   @override
   Future<SecretKey> newSecretKeyFromBytes(List<int> bytes) {
     if (bytes.length != secretKeyLength) {
       throw ArgumentError('Invalid secret key length');
     }
-    return Future<_DartAesSecretKeyData>.value(_DartAesSecretKeyData(bytes));
+    return Future<_DartAesSecretKeyData>.value(
+      _DartAesSecretKeyData(bytes),
+    );
   }
 }
 
@@ -341,5 +355,23 @@ class _DartAesSecretKeyData extends SecretKeyData {
   Uint32List? _expandedBytesForEncrypting;
   Uint32List? _expandedBytesForDecrypting;
 
-  _DartAesSecretKeyData(List<int> bytes) : super(bytes);
+  _DartAesSecretKeyData(
+    List<int> bytes, {
+    bool overwriteWhenDestroyed = false,
+  }) : super(bytes, overwriteWhenDestroyed: overwriteWhenDestroyed);
+
+  @override
+  void destroy() {
+    super.destroy();
+    _erase(_expandedBytesForEncrypting);
+    _erase(_expandedBytesForDecrypting);
+    _expandedBytesForEncrypting = null;
+    _expandedBytesForDecrypting = null;
+  }
+
+  static void _erase(Uint32List? list) {
+    if (list != null) {
+      list.fillRange(0, list.length, 0);
+    }
+  }
 }

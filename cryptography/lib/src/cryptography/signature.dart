@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 import 'package:collection/collection.dart';
 import 'package:cryptography/cryptography.dart';
 
-/// A digital signature made of [bytes] and [publicKey].
+/// A digital signature by some [SignatureAlgorithm].
 ///
-/// Messages can be signed and verified with some [SignatureAlgorithm].
+/// Use [SignatureAlgorithm.sign] to compute signatures and
+/// [SignatureAlgorithm.verify] to verify them.
 class Signature {
   /// Signature bytes.
   final List<int> bytes;

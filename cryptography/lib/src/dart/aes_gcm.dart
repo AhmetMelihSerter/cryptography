@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,27 @@
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/src/dart/dart_mac_algorithm.dart';
 import 'package:meta/meta.dart';
 
-import '../utils.dart';
+import '../../helpers.dart';
 import 'aes_impl.dart';
 
 const _bit32 = 0x100 * 0x100 * 0x100 * 0x100;
 
-/// [AesGcm] cipher implemented in pure Dart.
+int _uint32ChangeEndian(int v) {
+// We mask with 0xFFFFFFFF to ensure the compiler recognizes the value will
+// be small enough to be a 'mint'.
+  return (0xFFFFFFFF & ((0xFF & v) << 24)) |
+      (0xFFFFFF & ((0xFF & (v >> 8)) << 16)) |
+      (0xFFFF & ((0xFF & (v >> 16)) << 8)) |
+      (0xFF & (v >> 24));
+}
+
+/// [AesGcm] implemented in pure Dart.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [AesGcm].
 //
 // The implementation was written based on the original specification:
 //   https://csrc.nist.gov/publications/detail/sp/800-38d/final
@@ -34,17 +47,31 @@ class DartAesGcm extends AesGcm with DartAesMixin {
   @override
   final int secretKeyLength;
 
-  DartAesGcm({this.secretKeyLength = 32, this.nonceLength = 12})
-      : assert(secretKeyLength == 16 ||
+  DartAesGcm({
+    this.secretKeyLength = 32,
+    this.nonceLength = AesGcm.defaultNonceLength,
+    super.random,
+  })  : assert(secretKeyLength == 16 ||
             secretKeyLength == 24 ||
             secretKeyLength == 32),
         assert(nonceLength >= 4),
         super.constructor() {
-    // We haven't fixed endianness issues.
     if (Endian.host != Endian.little) {
       throw StateError('BigEndian systems are unsupported');
     }
   }
+
+  DartAesGcm.with128bits({
+    int nonceLength = AesGcm.defaultNonceLength,
+  }) : this(secretKeyLength: 16, nonceLength: nonceLength);
+
+  DartAesGcm.with192bits({
+    int nonceLength = AesGcm.defaultNonceLength,
+  }) : this(secretKeyLength: 24, nonceLength: nonceLength);
+
+  DartAesGcm.with256bits({
+    int nonceLength = AesGcm.defaultNonceLength,
+  }) : this(secretKeyLength: 32, nonceLength: nonceLength);
 
   @nonVirtual
   @override
@@ -52,14 +79,13 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     SecretBox secretBox, {
     required SecretKey secretKey,
     List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
+    Uint8List? possibleBuffer,
   }) async {
     final secretKeyData = await secretKey.extract();
     return decryptSync(
       secretBox,
       secretKeyData: secretKeyData,
       aad: aad,
-      keyStreamIndex: keyStreamIndex,
     );
   }
 
@@ -67,7 +93,6 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     SecretBox secretBox, {
     required SecretKeyData secretKeyData,
     List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
   }) {
     final actualSecretKeyLength = secretKeyData.bytes.length;
     final expectedSecretKeyLength = secretKeyLength;
@@ -75,11 +100,8 @@ class DartAesGcm extends AesGcm with DartAesMixin {
       throw ArgumentError.value(
         secretKeyData,
         'secretKeyData',
-        'Expected $secretKeyLength bytes, got $actualSecretKeyLength bytes',
+        'Expected $expectedSecretKeyLength bytes, got $actualSecretKeyLength bytes',
       );
-    }
-    if (keyStreamIndex < 0 || keyStreamIndex >= 0x10000000) {
-      throw ArgumentError.value(keyStreamIndex, 'keyStreamIndex');
     }
     final nonce = secretBox.nonce;
 
@@ -109,17 +131,17 @@ class DartAesGcm extends AesGcm with DartAesMixin {
 
     // Check MAC is correct
     if (calculatedMac != mac) {
-      throw SecretBoxAuthenticationError(secretBox: secretBox);
+      throw SecretBoxAuthenticationError();
     }
 
     // Increment nonce
-    bytesIncrementBigEndian(stateBytes, 1 + (keyStreamIndex ~/ 16));
+    bytesIncrementBigEndian(stateBytes, 1);
 
     // Allocate output bytes
     final blockCount = (cipherText.length + 31) ~/ 16;
     final keyStream = Uint32List(blockCount * 4);
 
-    // For each keystream block
+    // For each key stream block
     for (var i = 0; i < keyStream.length; i += 4) {
       // Encrypt state.
       aesEncryptBlock(keyStream, i, state, 0, expandedKey);
@@ -128,10 +150,10 @@ class DartAesGcm extends AesGcm with DartAesMixin {
       bytesIncrementBigEndian(stateBytes, 1);
     }
 
-    // clearText = keyStream[start, end] ^ ciphertext
+    // clearText = keyStream ^ ciphertext`
     final clearText = Uint8List.view(
       keyStream.buffer,
-      keyStream.offsetInBytes + keyStreamIndex % 16,
+      keyStream.offsetInBytes,
       cipherText.length,
     );
     for (var i = 0; i < cipherText.length; i++) {
@@ -147,7 +169,7 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     required SecretKey secretKey,
     List<int>? nonce,
     List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
+    Uint8List? possibleBuffer,
   }) async {
     final secretKeyData = await secretKey.extract();
     return encryptSync(
@@ -155,7 +177,6 @@ class DartAesGcm extends AesGcm with DartAesMixin {
       secretKeyData: secretKeyData,
       nonce: nonce,
       aad: aad,
-      keyStreamIndex: keyStreamIndex,
     );
   } // = 1<<32
 
@@ -164,7 +185,6 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     required SecretKeyData secretKeyData,
     List<int>? nonce,
     List<int> aad = const <int>[],
-    int keyStreamIndex = 0,
   }) {
     final actualSecretKeyLength = secretKeyData.bytes.length;
     final expectedSecretKeyLength = secretKeyLength;
@@ -172,11 +192,8 @@ class DartAesGcm extends AesGcm with DartAesMixin {
       throw ArgumentError.value(
         secretKeyData,
         'secretKeyData',
-        'Expected $secretKeyLength bytes, got $actualSecretKeyLength bytes',
+        'Expected $expectedSecretKeyLength bytes, got $actualSecretKeyLength bytes',
       );
-    }
-    if (keyStreamIndex < 0 || keyStreamIndex >= 0x10000000) {
-      throw ArgumentError.value(keyStreamIndex, 'keyStreamIndex');
     }
     nonce ??= newNonce();
     final expandedKey = aesExpandKeyForEncrypting(secretKeyData);
@@ -197,10 +214,10 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     final stateOfFirstBlock = Uint32List.fromList(state);
 
     // Increment nonce
-    bytesIncrementBigEndian(stateBytes, 1 + (keyStreamIndex ~/ 16));
+    bytesIncrementBigEndian(stateBytes, 1);
 
     // Allocate space for output bytes + 128 bit hash
-    final blockCount = (keyStreamIndex % 16 + clearText.length + 15) ~/ 16;
+    final blockCount = (clearText.length + 15) ~/ 16;
     final keyStream = Uint32List((blockCount + 1) * 4);
 
     // For each block
@@ -212,10 +229,10 @@ class DartAesGcm extends AesGcm with DartAesMixin {
       bytesIncrementBigEndian(stateBytes, 1);
     }
 
-    // cipherText = keyStream[start, end] ^ clearText
+    // cipherText = keyStream ^ clearText
     final cipherText = Uint8List.view(
       keyStream.buffer,
-      keyStream.offsetInBytes + keyStreamIndex % 16,
+      keyStream.offsetInBytes,
       clearText.length,
     );
     for (var i = 0; i < clearText.length; i++) {
@@ -234,12 +251,17 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     return SecretBox(cipherText, nonce: nonce, mac: mac);
   }
 
+  @override
+  DartAesGcm toSync() {
+    return this;
+  }
+
   static void _ghash(Uint32List result, Uint32List h, List<int> data) {
-    final tmp = ByteData(16);
-    tmp.setUint32(0, 0);
-    tmp.setUint32(4, 0);
-    tmp.setUint32(8, 0);
-    tmp.setUint32(12, 0);
+    final ghashState = ByteData(16);
+    ghashState.setUint32(0, 0);
+    ghashState.setUint32(4, 0);
+    ghashState.setUint32(8, 0);
+    ghashState.setUint32(12, 0);
 
     // Allocate one block
     var x0 = _uint32ChangeEndian(result[0]);
@@ -255,24 +277,24 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     for (var i = 0; i < data.length; i += 16) {
       if (i + 16 <= data.length) {
         for (var j = 0; j < 16; j++) {
-          tmp.setUint8(j, data[i + j]);
+          ghashState.setUint8(j, data[i + j]);
         }
       } else {
-        tmp.setUint32(0, 0);
-        tmp.setUint32(4, 0);
-        tmp.setUint32(8, 0);
-        tmp.setUint32(12, 0);
+        ghashState.setUint32(0, 0);
+        ghashState.setUint32(4, 0);
+        ghashState.setUint32(8, 0);
+        ghashState.setUint32(12, 0);
         final n = data.length % 16;
         for (var j = 0; j < n; j++) {
-          tmp.setUint8(j, data[i + j]);
+          ghashState.setUint8(j, data[i + j]);
         }
       }
 
       // result ^= x_i
-      x0 ^= tmp.getUint32(0, Endian.big);
-      x1 ^= tmp.getUint32(4, Endian.big);
-      x2 ^= tmp.getUint32(8, Endian.big);
-      x3 ^= tmp.getUint32(12, Endian.big);
+      x0 ^= ghashState.getUint32(0, Endian.big);
+      x1 ^= ghashState.getUint32(4, Endian.big);
+      x2 ^= ghashState.getUint32(8, Endian.big);
+      x3 ^= ghashState.getUint32(12, Endian.big);
 
       var z0 = 0;
       var z1 = 0;
@@ -359,23 +381,14 @@ class DartAesGcm extends AesGcm with DartAesMixin {
     _ghash(result, h, suffixBytes);
     return Uint8List.view(result.buffer);
   }
-
-  static int _uint32ChangeEndian(int v) {
-    // We mask with 0xFFFFFFFF to ensure the compiler recognizes the value will
-    // be small enough to be a 'mint'.
-    return (0xFFFFFFFF & ((0xFF & v) << 24)) |
-        (0xFFFFFF & ((0xFF & (v >> 8)) << 16)) |
-        (0xFFFF & ((0xFF & (v >> 16)) << 8)) |
-        (0xFF & (v >> 24));
-  }
 }
 
 /// [AesGcm] MAC algorithm implemented in pure Dart.
-class DartGcm extends MacAlgorithm {
+class DartGcm extends MacAlgorithm with DartMacAlgorithmMixin {
+  const DartGcm();
+
   @override
   int get macLength => 16;
-
-  const DartGcm();
 
   @override
   bool get supportsAad => true;
@@ -390,6 +403,22 @@ class DartGcm extends MacAlgorithm {
     throw UnsupportedError(
       'AES-GCM MAC algorithm can NOT be called separately.',
     );
+  }
+
+  @override
+  DartMacSinkMixin newMacSinkSync(
+      {required SecretKeyData secretKeyData,
+      List<int> nonce = const <int>[],
+      List<int> aad = const <int>[]}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  String toString() => 'DartGcm()';
+
+  @override
+  DartGcm toSync() {
+    return this;
   }
 
   Mac _calculateMacSync(
@@ -425,10 +454,6 @@ class DartGcm extends MacAlgorithm {
     mac[2] ^= encryptedPrecounter[2];
     mac[3] ^= encryptedPrecounter[3];
 
-    final macBytes = Uint8List.view(mac.buffer);
-    return Mac(List<int>.unmodifiable(macBytes));
+    return Mac(Uint8List.view(mac.buffer));
   }
-
-  @override
-  String toString() => 'DartGcm(macLength: $macLength)';
 }

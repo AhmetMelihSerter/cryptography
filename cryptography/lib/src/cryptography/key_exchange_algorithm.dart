@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,10 @@
 
 import 'package:cryptography/cryptography.dart';
 
-/// A key exchange algorithm that supports [newKeyPair()] and [sharedSecretKey()].
+/// Abstract superclass for key exchange algorithms.
+///
+/// A key exchange algorithm must support [newKeyPair()] and
+/// [sharedSecretKey()].
 ///
 /// ## Available algorithms
 ///   * [Ecdh.p256]
@@ -28,20 +31,23 @@ import 'package:cryptography/cryptography.dart';
 /// import 'package:cryptography/cryptography.dart';
 ///
 /// Future<void> main() async {
-///   // Generate a key pair.
+///   // Generate a key pair for Alice
 ///   final algorithm = X25519();
-///   final keyPair = await algorithm.keyGenerator.newKeyPair();
+///   final aliceKeyPair = await algorithm.newKeyPair();
 ///
-///   // Get a public key for our peer.
-///   final remoteKeyPair = await algorithm.keyGenerator.newKeyPair();
-///   final remotePublicKey = await remoteKeyPair.extractPublicKey();
+///   // Generate a key pair for Bob.
+///   //
+///   // In a real application, we will receive or know Bob's public key
+///   // somehow.
+///   final bobKeyPair = await algorithm.newKeyPair();
+///   final bobPublicKey = await bobKeyPair.extractPublicKey();
 ///
 ///   // We can now calculate a shared secret.
 ///   final sharedSecret = await algorithm.sharedSecretKey(
-///     keyPair: keyPair,
-///     remotePublicKey: remotePublicKey,
+///     keyPair: aliceKeyPair,
+///     remotePublicKey: bobPublicKey,
 ///   );
-///   final sharedSecretBytes = sharedSecret.extractBytes();
+///   final sharedSecretBytes = await sharedSecret.extractBytes();
 ///   print('Shared secret: $sharedSecretBytes');
 /// }
 ///```
@@ -50,11 +56,52 @@ abstract class KeyExchangeAlgorithm {
 
   KeyPairType get keyPairType;
 
-  /// Generates a new [KeyPair] for this algorithm.
+  /// Returns a new [KeyExchangeWand] that has a random [KeyPair].
+  Future<KeyExchangeWand> newKeyExchangeWand() async {
+    final keyPair = await newKeyPair();
+    return newKeyExchangeWandFromKeyPair(keyPair);
+  }
+
+  /// Returns a new [KeyExchangeWand] that uses the given [KeyPair].
+  Future<KeyExchangeWand> newKeyExchangeWandFromKeyPair(KeyPair keyPair) async {
+    return _KeyExchangeWand(this, keyPair);
+  }
+
+  /// Generates a new [KeyPair] that can be used with this algorithm.
   ///
-  /// You can pass key generation preferences by specifying `options`.
+  /// ## Example
+  /// In this example, we use [X25519]:
+  /// ```dart
+  /// import 'package:cryptography/cryptography.dart';
+  ///
+  /// Future<void> main() async {
+  ///   final algorithm = X25519();
+  ///   final keyPair = await algorithm.newKeyPair();
+  /// }
+  ///```
   Future<KeyPair> newKeyPair();
 
+  /// Generates a key pair from the seed.
+  ///
+  /// This will throw [UnsupportedError] if the algorithm does not support
+  /// seeds for private key generation.
+  ///
+  /// ## Example
+  /// In this example, we use [X25519]:
+  /// ```dart
+  /// import 'dart:convert';
+  /// import 'package:cryptography/cryptography.dart';
+  ///
+  /// Future<void> main() async {
+  ///   // X25519 seed is any 32 bytes.
+  ///   // We can use SHA256, which computes a 32-byte hash from any input.
+  ///   final seed = utf8.encode('example');
+  ///   final seedWith32Bytes = (await Sha256().hash(seed)).bytes;
+  ///
+  ///   final algorithm = X25519();
+  ///   final keyPair = await algorithm.newKeyPairFromSeed(seedWith32Bytes);
+  /// }
+  ///```
   Future<KeyPair> newKeyPairFromSeed(List<int> seed) {
     throw UnsupportedError(
       'newKeyPairFromSeed() is unsupported by this algorithm',
@@ -62,8 +109,61 @@ abstract class KeyExchangeAlgorithm {
   }
 
   /// Calculates a shared [SecretKey].
+  ///
+  /// ## Example
+  /// In this example, we use [X25519]:
+  /// ```dart
+  /// import 'package:cryptography/cryptography.dart';
+  ///
+  /// Future<void> main() async {
+  ///   final algorithm = X25519();
+  ///
+  ///   // We need the private key pair of Alice.
+  ///   final aliceKeyPair = await algorithm.newKeyPair();
+  ///
+  ///   // We need only public key of Bob.
+  ///   final bobKeyPair = await algorithm.newKeyPair();
+  ///   final bobPublicKey = await bobKeyPair.extractPublicKey();
+  ///
+  ///   // We can now calculate a 32-byte shared secret key.
+  ///   final sharedSecretKey = await algorithm.sharedSecretKey(
+  ///     keyPair: aliceKeyPair,
+  ///     remotePublicKey: bobPublicKey,
+  ///   );
+  /// }
+  /// ```
   Future<SecretKey> sharedSecretKey({
     required KeyPair keyPair,
     required PublicKey remotePublicKey,
   });
+}
+
+class _KeyExchangeWand extends KeyExchangeWand {
+  final KeyExchangeAlgorithm keyExchangeAlgorithm;
+  final KeyPair _keyPair;
+
+  _KeyExchangeWand(
+    this.keyExchangeAlgorithm,
+    this._keyPair,
+  ) : super.constructor();
+
+  @override
+  Future<void> destroy() async {
+    await super.destroy();
+    _keyPair.destroy();
+  }
+
+  @override
+  Future<PublicKey> extractPublicKey() => _keyPair.extractPublicKey();
+
+  @override
+  Future<SecretKey> sharedSecretKey({required PublicKey remotePublicKey}) {
+    if (hasBeenDestroyed) {
+      throw StateError('destroy() has been called');
+    }
+    return keyExchangeAlgorithm.sharedSecretKey(
+      keyPair: _keyPair,
+      remotePublicKey: remotePublicKey,
+    );
+  }
 }

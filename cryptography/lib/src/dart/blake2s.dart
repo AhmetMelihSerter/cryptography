@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,68 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/dart.dart';
-import 'package:cryptography/src/utils.dart';
+import 'package:cryptography/src/dart/_helpers.dart';
 
-class DartBlake2s extends Blake2s with DartHashAlgorithmMixin {
-  const DartBlake2s() : super.constructor();
+import '../_internal/rotate.dart';
+
+/// Block size (in bytes).
+const _blockSizeInBytes = 64;
+
+/// Maximum key size (in bytes).
+const _maxKeySizeInBytes = 32;
+
+/// [Blake2s] implemented in pure Dart.
+///
+/// For examples and more information about the algorithm, see documentation for
+/// the class [Blake2s].
+class DartBlake2s extends Blake2s
+    with DartHashAlgorithmMixin, DartMacAlgorithmMixin {
+  const DartBlake2s({
+    super.hashLengthInBytes = Blake2s.defaultHashLengthInBytes,
+  }) : super.constructor();
 
   @override
-  DartHashSink newHashSink() {
-    return _Blake2sSink();
+  DartHashSink newHashSink({SecretKeyData? secretKey}) {
+    return _Blake2sSink(
+      hashLengthInBytes: hashLengthInBytes,
+    );
+  }
+
+  @override
+  DartMacSinkMixin newMacSinkSync({
+    required SecretKeyData secretKeyData,
+    List<int> nonce = const <int>[],
+    List<int> aad = const <int>[],
+  }) {
+    return _Blake2sSink(
+      hashLengthInBytes: hashLengthInBytes,
+    )..initializeSync(
+        secretKey: secretKeyData,
+        nonce: nonce,
+        aad: aad,
+      );
+  }
+
+  @override
+  DartBlake2s toSync() {
+    return this;
   }
 }
 
-class _Blake2sSink extends DartHashSink {
+class _Blake2sSink extends DartHashSink with DartMacSinkMixin {
+  /// Initialization vector.
+  static const List<int> _initializationVector = <int>[
+    0x6a09e667,
+    0xbb67ae85,
+    0x3c6ef372,
+    0xa54ff53a,
+    0x510e527f,
+    0x9b05688c,
+    0x1f83d9ab,
+    0x5be0cd19,
+  ];
+
+  /// Sigma values.
   static const List<int> _sigma = <int>[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, // 16 bytes
     14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
@@ -42,65 +92,77 @@ class _Blake2sSink extends DartHashSink {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3
   ];
-  static const List<int> _initializationVector = <int>[
-    0x6a09e667,
-    0xbb67ae85,
-    0x3c6ef372,
-    0xa54ff53a,
-    0x510e527f,
-    0x9b05688c,
-    0x1f83d9ab,
-    0x5be0cd19,
-  ];
-  final Uint32List _hash = Uint32List(16);
+
+  /// Hash: 8 x uint32
+  final Uint32List _hash = Uint32List(8);
+
+  /// Hash: N bytes (N <= 32)
+  @override
+  late final Uint8List hashBytes = Uint8List.view(
+    _hash.buffer,
+    0,
+    hashLengthInBytes,
+  );
+
+  /// Buffer for writing data: 16 x uint32
   final Uint32List _buffer = Uint32List(16);
-  Uint8List? _bufferAsBytes;
 
-  ByteData? _bufferAsByteData;
+  /// Buffer for writing data: 64 bytes
+  late final Uint8List _bufferAsBytes = Uint8List.view(_buffer.buffer);
 
-  int _length = 0;
-
-  Hash? _result;
-
-  bool _isClosed = false;
-
+  /// State of the hash: 16 x uint32
   final Uint32List _localValues = Uint32List(16);
 
-  _Blake2sSink() {
-    final h = _hash;
-    final iv = _initializationVector;
-    for (var i = 0; i < 8; i++) {
-      h[i] = iv[i];
+  /// Total length so far.
+  int _length = 0;
+
+  /// Whether [close] was called.
+  bool _isClosed = false;
+
+  /// Hash length in bytes (constructor parameter).
+  final int hashLengthInBytes;
+
+  _Blake2sSink({required this.hashLengthInBytes}) {
+    if (hashLengthInBytes < 1 || hashLengthInBytes > 32) {
+      throw ArgumentError.value(hashLengthInBytes);
     }
-    h[0] = h[0] ^ 0x01010000 ^ 32;
+    checkSystemIsLittleEndian();
+    _initialize(
+      key: null,
+    );
   }
 
   @override
+  bool get isClosed => _isClosed;
+
+  @override
+  int get length => _length;
+
+  @override
+  Uint8List get macBytes => hashBytes;
+
+  @override
   void addSlice(List<int> chunk, int start, int end, bool isLast) {
-    if (_isClosed) {
+    if (isClosed) {
       throw StateError('Already closed');
     }
 
-    var bufferAsBytes = _bufferAsBytes;
-    if (bufferAsBytes == null) {
-      bufferAsBytes ??= Uint8List.view(_buffer.buffer);
-      _bufferAsBytes = bufferAsBytes;
-    }
+    final bufferAsBytes = _bufferAsBytes;
     var length = _length;
     for (var i = start; i < end; i++) {
-      final bufferIndex = length % 64;
-
-      // If first byte of a new block
-      if (bufferIndex == 0 && length > 0) {
-        // Store length
-        _length = length;
-
-        // Compress the previous block
-        _compress(false);
+      // Compress?
+      if (length % _blockSizeInBytes == 0 && length > 0) {
+        _compress(
+          _hash,
+          _localValues,
+          _buffer,
+          length,
+          false,
+        );
       }
 
       // Set byte
-      bufferAsBytes[bufferIndex] = chunk[i];
+      bufferAsBytes[length % _blockSizeInBytes] = chunk[i];
 
       // Increment length
       length++;
@@ -110,98 +172,86 @@ class _Blake2sSink extends DartHashSink {
     _length = length;
 
     if (isLast) {
-      close();
+      _isClosed = true;
+      if (length == 0 || length % _blockSizeInBytes != 0) {
+        for (var i = length % _blockSizeInBytes; i < _blockSizeInBytes; i++) {
+          bufferAsBytes[i] = 0;
+        }
+      }
+      _compress(
+        _hash,
+        _localValues,
+        _buffer,
+        length,
+        true,
+      );
     }
   }
 
   @override
-  void close() {
-    if (_isClosed) {
-      return;
+  void initializeSync({
+    required SecretKeyData secretKey,
+    required List<int> nonce,
+    List<int> aad = const [],
+  }) {
+    final secretKeyBytes = secretKey.bytes;
+    if (secretKeyBytes.length > _maxKeySizeInBytes) {
+      throw ArgumentError('Too large secret key: ${secretKey.bytes.length}');
     }
-    _isClosed = true;
-
-    final length = _length;
-
-    // Fill remaining indices with zeroes
-    final blockLength = length % 64;
-    if (blockLength > 0) {
-      _bufferAsBytes!.fillRange(blockLength, 64, 0);
-    }
-
-    // Compress
-    _compress(true);
-
-    // Change:
-    // Host endian --> little endian
-    final hash = _hash;
-    if (Endian.host != Endian.little) {
-      final byteData = ByteData.view(hash.buffer);
-      for (var i = 0; i < 32; i += 4) {
-        byteData.setUint32(
-          i,
-          byteData.getUint32(i, Endian.host),
-          Endian.little,
-        );
-      }
-    }
-
-    // Return bytes
-    _result = Hash(List<int>.unmodifiable(
-      Uint8List.view(
-        hash.buffer,
-        hash.offsetInBytes,
-        32,
-      ),
-    ));
+    _initialize(key: secretKeyBytes);
   }
 
   @override
-  Hash hashSync() {
-    final result = _result;
-    if (result == null) {
-      throw StateError('Not closed');
-    }
-    return result;
+  void reset() {
+    _length = 0;
+    _isClosed = false;
+    _buffer.fillRange(0, 16, 0);
+    _localValues.fillRange(0, 16, 0);
+    _initialize(
+      key: null,
+    );
   }
 
-  void _compress(bool isLast) {
-    // Change:
-    // little endian --> host endian
-    if (Endian.host != Endian.little) {
-      // We need ByteData view
-      final bufferAsByteData =
-          _bufferAsByteData ??= ByteData.view(_buffer.buffer);
-
-      // Every 4 bytes
-      for (var i = 0; i < 64; i += 4) {
-        // Convert endian
-        bufferAsByteData.setUint32(
-          i,
-          bufferAsByteData.getUint32(i, Endian.little),
-          Endian.host,
-        );
-      }
-    }
-
+  void _initialize({
+    required List<int>? key,
+  }) {
     final h = _hash;
-    final v = _localValues;
-    final m = _buffer;
+    h.setAll(0, _initializationVector);
+    h[0] ^=
+        0x01010000 ^ (key == null ? 0 : key.length << 8) ^ hashLengthInBytes;
 
+    // If we have a key, add it
+    if (key != null) {
+      final keyLength = key.length;
+      if (keyLength > _maxKeySizeInBytes) {
+        throw ArgumentError();
+      }
+      add(key);
+      add(Uint8List(_blockSizeInBytes - keyLength % _blockSizeInBytes));
+    }
+  }
+
+  /// Internal compression function.
+  static void _compress(
+    Uint32List h,
+    Uint32List v,
+    Uint32List m,
+    int length,
+    bool isLast,
+  ) {
     // Initialize v[0..7]
     for (var i = 0; i < 8; i++) {
       v[i] = h[i];
     }
 
     // Initialize v[8..15]
-    final initializationVector = _initializationVector;
+    const initializationVector = _initializationVector;
     for (var i = 0; i < 8; i++) {
       v[8 + i] = initializationVector[i];
     }
 
     // Set length.
     // We can't use setUint64(...) because it doesn't work in browsers.
-    final length = _length;
     v[12] ^= uint32mask & length;
     v[13] ^= length ~/ (uint32mask + 1);
 
@@ -210,7 +260,7 @@ class _Blake2sSink extends DartHashSink {
       v[14] ^= uint32mask;
     }
 
-    final sigma = _sigma;
+    const sigma = _sigma;
 
     // 10 rounds
     for (var round = 0; round < 10; round++) {
@@ -230,18 +280,43 @@ class _Blake2sSink extends DartHashSink {
 
     // Copy.
     for (var i = 0; i < 8; i++) {
-      h[i] = h[i] ^ v[i] ^ v[8 + i];
+      h[i] ^= v[i] ^ v[8 + i];
     }
   }
 
   static void _g(Uint32List v, int a, int b, int c, int d, int x, int y) {
-    v[a] = uint32mask & (v[a] + v[b] + x);
-    v[d] = rotateRight32((v[d] ^ v[a]), 16);
-    v[c] = uint32mask & (v[c] + v[d]);
-    v[b] = rotateRight32((v[b] ^ v[c]), 12);
-    v[a] = uint32mask & (v[a] + v[b] + y);
-    v[d] = rotateRight32((v[d] ^ v[a]), 8);
-    v[c] = uint32mask & (v[c] + v[d]);
-    v[b] = rotateRight32((v[b] ^ v[c]), 7);
+    var va = v[a];
+    var vb = v[b];
+    var vc = v[c];
+    var vd = v[d];
+
+    {
+      va = uint32mask & (va + vb + x);
+      final rotated = vd ^ va;
+      vd = (uint32mask & (rotated << 16)) | (rotated >> 16);
+    }
+
+    {
+      vc = uint32mask & (vc + vd);
+      final rotated = vb ^ vc;
+      vb = (uint32mask & (rotated << 20)) | (rotated >> 12);
+    }
+
+    {
+      va = uint32mask & (va + vb + y);
+      final rotated = vd ^ va;
+      vd = (uint32mask & (rotated << 24)) | (rotated >> 8);
+    }
+
+    {
+      vc = uint32mask & (vc + vd);
+      final rotated = vb ^ vc;
+      vb = (uint32mask & (rotated << 25)) | (rotated >> 7);
+    }
+
+    v[a] = va;
+    v[b] = vb;
+    v[c] = vc;
+    v[d] = vd;
   }
 }

@@ -1,16 +1,7 @@
-# Running tests
-## Android
-```
-flutter clean
-flutter emulators --launch android
-flutter devices
-flutter drive --driver=integration_test/driver.dart --target=integration_test/integration_test.dart -d YOUR_DEVICE_ID
-```
+# Running the example
 
-## iOS
+In the command line, run the following command:
+
 ```
-flutter clean
-flutter emulators --launch ios
-flutter devices
-flutter drive --driver=integration_test/driver.dart --target=integration_test/integration_test.dart -d YOUR_DEVICE_ID
+flutter run
 ```

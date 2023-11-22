@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,6 @@
 /// Cryptographic algorithms implemented in pure Dart.
 ///
 /// See [DartCryptography].
-///
-/// ## Synchronous evaluation
-///   * [DartCipher]
-///   * [DartHashAlgorithm]
-///   * [DartMacAlgorithm]
-///   * [DartStreamingCipher]
-///
 library cryptography.dart;
 
 import 'package:cryptography/dart.dart';
@@ -30,12 +23,16 @@ export 'src/dart/aes_cbc.dart';
 export 'src/dart/aes_ctr.dart';
 export 'src/dart/aes_gcm.dart';
 export 'src/dart/argon2.dart';
-export 'src/dart/base_classes.dart';
 export 'src/dart/blake2b.dart';
 export 'src/dart/blake2s.dart';
 export 'src/dart/chacha20.dart';
-export 'src/dart/chacha20_poly1305_aead.dart';
+export 'src/dart/chacha20_poly1305_aead_mac_algorithm.dart';
 export 'src/dart/cryptography.dart';
+export 'src/dart/dart_cipher.dart';
+export 'src/dart/dart_hash_algorithm.dart';
+export 'src/dart/dart_key_exchange_algorithm.dart';
+export 'src/dart/dart_mac_algorithm.dart';
+export 'src/dart/dart_signature_algorithm.dart';
 export 'src/dart/ecdh.dart';
 export 'src/dart/ecdsa.dart';
 export 'src/dart/ed25519.dart';
@@ -46,6 +43,8 @@ export 'src/dart/pbkdf2.dart';
 export 'src/dart/poly1305.dart';
 export 'src/dart/rsa_pss.dart';
 export 'src/dart/rsa_ssa_pkcs1v15.dart';
-export 'src/dart/sha1_sha2.dart';
+export 'src/dart/sha1.dart';
+export 'src/dart/sha256.dart';
+export 'src/dart/sha512.dart';
 export 'src/dart/x25519.dart';
 export 'src/dart/xchacha20.dart';

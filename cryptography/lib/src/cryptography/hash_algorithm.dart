@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:meta/meta.dart';
+import 'package:cryptography/dart.dart';
 
 /// A hash algorithm that produces a [Hash].
 ///
@@ -104,13 +104,12 @@ abstract class HashAlgorithm {
   /// ```
   HashSink newHashSink() => _HashSink(this);
 
-  /// {@nodoc}
-  @nonVirtual
-  @Deprecated('Use newHashSink() instead')
-  HashSink newSink() => newHashSink();
-
   @override
-  String toString();
+  String toString() => '$runtimeType()';
+
+  /// For synchronous computations, returns a pure Dart implementation of the
+  /// hash algorithm.
+  DartHashAlgorithm toSync();
 }
 
 /// A sink for calculating [Hash] for long sequences.
@@ -162,6 +161,9 @@ class _HashSink extends HashSink {
       chunk = chunk.sublist(start, end);
     }
     _bytesBuilder.add(chunk);
+    if (isLast) {
+      close();
+    }
   }
 
   @override
@@ -175,5 +177,10 @@ class _HashSink extends HashSink {
       throw StateError('Sink is not closed');
     }
     return hashAlgorithm.hash(_bytesBuilder.toBytes());
+  }
+
+  void reset() {
+    _bytesBuilder.clear();
+    _isClosed = false;
   }
 }

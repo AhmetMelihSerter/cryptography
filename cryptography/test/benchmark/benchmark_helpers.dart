@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Gohilla Ltd.
+// Copyright 2019-2020 Gohilla.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,8 @@ abstract class SimpleBenchmark {
       watch.stop();
 
       n = (n * (1000000 / watch.elapsed.inMicroseconds)).ceil();
-      print('$_name:'.padRight(32, ' ') + ' $n op / second');
+      final prefix = '$_name:'.padRight(32, ' ');
+      print('$prefix $n op / second');
     } finally {
       await teardown();
     }
